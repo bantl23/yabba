@@ -1,0 +1,23 @@
+project_name: yabba
+builds:
+  - env:
+      - CGO_ENABLED=0
+    ldflags: 
+      - -X github.com/bantl23/yabba/cmd.Version={{.Version}} -X github.com/bantl23/yabba/cmd.Hash={{.Commit}}
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+  
+nfpms:
+- maintainer: Carlos A Becker <root@carlosbecker.dev>
+  description: Yet another blah bandwidth analyzer
+  homepage: https://github.com/bantl23/yabba
+  license: MIT
+  formats:
+  - deb
+  - rpm
+  - apk
