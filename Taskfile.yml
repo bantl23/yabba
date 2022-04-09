@@ -1,5 +1,30 @@
 version: '3'
 
+vars:
+  MAJOR0:
+    sh: git describe --tags --abbrev=0 | cut -f1 -d.
+  MAJOR:
+    sh: if [ ! -z "{{.MAJOR}}" ]; then echo "v0"; else echo {{.MAJOR0}}; fi
+  MINOR0:
+    sh: git describe --tags --abbrev=0 | cut -f2 -d.
+  MINOR:
+    sh: if [ ! -z "{{.MINOR}}" ]; then echo "0"; else echo {{.MINOR0}}; fi
+  PATCH0:
+    sh: git describe --tags --abbrev=0 | cut -f3 -d.
+  PATCH:
+    sh: if [ ! -z "{{.PATCH}}" ]; then echo "0"; else echo {{.PATCH0}}; fi
+  BRANCH:
+    sh: git symbolic-ref --short HEAD | cut -f1 -d-
+  COMMITS:
+    sh: git describe --tags | cut -f2 -d-
+  VERSION0: "{{.MAJOR}}.{{.MINOR}}.{{.PATCH}}"
+  VERSION1:
+    sh: if [ "{{.BRANCH}}" != "main" ]; then echo {{.VERSION0}}-issue.{{.BRANCH}}; else echo {{.VERSION0}}; fi
+  VERSION:
+    sh: if [ ! -z "{{.COMMITS}}" ]; then echo {{.VERSION1}}-build.{{.COMMITS}}; else echo {{.VERSION1}}; fi
+  HASH:
+    sh: git log --pretty=format:'%h' -n 1
+
 tasks:
   default:
     desc: List available tasks
@@ -19,10 +44,12 @@ tasks:
   build:
     desc: Build library
     cmds:
-    - go build
+    - go build -v -ldflags "-X github.com/bantl23/yabba/cmd.Version={{.VERSION}} -X github.com/bantl23/yabba/cmd.Hash={{.HASH}}"
     sources:
     - ./*.go
     - ./**/*.go
+    generates:
+    - yabba
   
   test:
     desc: Run unit tests
@@ -31,4 +58,8 @@ tasks:
     sources:
     - ./*.go
     - ./**/*.go
-
+  
+  clean:
+    desc: Cleans build
+    cmds:
+    - rm -f yabba
