@@ -1,0 +1,34 @@
+version: '3'
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+    - task --list-all
+
+  mod:
+    desc: Tidy modules
+    cmds:
+    - go mod download
+    - go mod tidy
+    sources:
+    - go.mod
+    generates:
+    - go.sum
+
+  build:
+    desc: Build library
+    cmds:
+    - go build
+    sources:
+    - ./*.go
+    - ./**/*.go
+  
+  test:
+    desc: Run unit tests
+    cmds:
+    - go test -v -cover ./...
+    sources:
+    - ./*.go
+    - ./**/*.go
+
