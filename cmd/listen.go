@@ -19,11 +19,11 @@ func init() {
 var listenCmd = &cobra.Command{
 	Use:   "listen",
 	Short: "Listens for clients",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		server := run.Server{
 			Address: listenAddr,
 			Size:    listenSize,
 		}
-		server.Run()
+		return server.Run()
 	},
 }

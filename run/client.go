@@ -1,7 +1,6 @@
 package run
 
 import (
-	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -81,21 +80,29 @@ func (client *Client) Run() error {
 
 func clientRunTcp(routine Routine, wg *sync.WaitGroup) {
 	defer wg.Done()
+
+	// Always send stats on exit (even zero) to avoid deadlocking printTotals.
+	stats := Stats{Address: routine.address, Item: routine.item}
+	defer func() { routine.statsChan <- stats }()
+
 	addr, err := net.ResolveTCPAddr("tcp", routine.address)
 	if err != nil {
-		fmt.Println(err)
+		log.WithError(err).Error("failed to resolve address")
+		routine.connectChan <- struct{}{} // unblock main goroutine
 		return
 	}
 	conn, err := net.DialTCP("tcp", nil, addr)
 	if err != nil {
-		fmt.Println(err)
+		log.WithError(err).Error("failed to dial")
+		routine.connectChan <- struct{}{} // unblock main goroutine
 		return
 	}
 	defer conn.Close()
 
 	err = conn.SetWriteBuffer(len(routine.buffer))
 	if err != nil {
-		fmt.Println(err)
+		log.WithError(err).Error("unable to set write buffer size")
+		routine.connectChan <- struct{}{} // unblock main goroutine
 		return
 	}
 
@@ -134,18 +141,21 @@ func clientRunTcp(routine Routine, wg *sync.WaitGroup) {
 		default:
 		}
 	}
-	routine.statsChan <- Stats{
-		Address:     conn.RemoteAddr().String(),
-		Item:        routine.item,
-		Bytes:       totalBytes,
-		ElapsedTime: totalElapsed,
-	}
 
-	mbps := float64(totalBytes) * 8 / 1024 / 1024 / totalElapsed.Seconds()
-	log.WithFields(log.Fields{
-		"address": conn.LocalAddr(),
-		"mbps":    mbps,
-	}).Info("rate")
+	stats.Bytes = totalBytes
+	stats.ElapsedTime = totalElapsed
+
+	if totalElapsed.Seconds() > 0 {
+		mbps := float64(totalBytes) * 8 / 1024 / 1024 / totalElapsed.Seconds()
+		log.WithFields(log.Fields{
+			"address": conn.LocalAddr(),
+			"mbps":    mbps,
+		}).Info("rate")
+	} else {
+		log.WithFields(log.Fields{
+			"address": conn.LocalAddr(),
+		}).Info("no data transferred")
+	}
 }
 
 func printTotals(statsChans []chan Stats) {
@@ -154,13 +164,12 @@ func printTotals(statsChans []chan Stats) {
 	// calculate bandwidth
 	for i := range statsChans {
 		s := <-statsChans[i]
-		_, ok := totals[s.Address]
-		if !ok {
+		if _, ok := totals[s.Address]; !ok {
 			items[s.Address] = 0
+			// Initialize with zero bytes/elapsed so the unconditional
+			// addition below is the only place bytes are accumulated.
 			totals[s.Address] = &Stats{
-				Address:     s.Address,
-				Bytes:       s.Bytes,
-				ElapsedTime: s.ElapsedTime,
+				Address: s.Address,
 			}
 		}
 		items[s.Address] = items[s.Address] + 1
@@ -168,10 +177,16 @@ func printTotals(statsChans []chan Stats) {
 		totals[s.Address].ElapsedTime = totals[s.Address].ElapsedTime + s.ElapsedTime
 	}
 	for k := range totals {
-		mbps := float64(totals[k].Bytes) * 8 / 1024 / 1024 / totals[k].ElapsedTime.Seconds() * float64(items[k])
-		log.WithFields(log.Fields{
-			"remote": totals[k].Address,
-			"mbps":   mbps,
-		}).Info("rate average")
+		if totals[k].ElapsedTime.Seconds() > 0 {
+			mbps := float64(totals[k].Bytes) * 8 / 1024 / 1024 / totals[k].ElapsedTime.Seconds() * float64(items[k])
+			log.WithFields(log.Fields{
+				"remote": totals[k].Address,
+				"mbps":   mbps,
+			}).Info("rate average")
+		} else {
+			log.WithFields(log.Fields{
+				"remote": totals[k].Address,
+			}).Info("no data transferred")
+		}
 	}
 }

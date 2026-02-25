@@ -4,15 +4,15 @@ vars:
   MAJOR0:
     sh: git describe --tags --abbrev=0 | cut -f1 -d.
   MAJOR:
-    sh: if [ ! -z "{{.MAJOR}}" ]; then echo "v0"; else echo {{.MAJOR0}}; fi
+    sh: if [ -z "{{.MAJOR0}}" ]; then echo "v0"; else echo {{.MAJOR0}}; fi
   MINOR0:
     sh: git describe --tags --abbrev=0 | cut -f2 -d.
   MINOR:
-    sh: if [ ! -z "{{.MINOR}}" ]; then echo "0"; else echo {{.MINOR0}}; fi
+    sh: if [ -z "{{.MINOR0}}" ]; then echo "0"; else echo {{.MINOR0}}; fi
   PATCH0:
     sh: git describe --tags --abbrev=0 | cut -f3 -d.
   PATCH:
-    sh: if [ ! -z "{{.PATCH}}" ]; then echo "0"; else echo {{.PATCH0}}; fi
+    sh: if [ -z "{{.PATCH0}}" ]; then echo "0"; else echo {{.PATCH0}}; fi
   BRANCH:
     sh: git symbolic-ref --short HEAD | cut -f1 -d-
   COMMITS:

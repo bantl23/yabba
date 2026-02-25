@@ -1,7 +1,6 @@
 package run
 
 import (
-	"fmt"
 	"net"
 	"time"
 
@@ -16,16 +15,15 @@ type Server struct {
 func (server *Server) Run() error {
 	l, err := net.Listen("tcp", server.Address)
 	if err != nil {
-		fmt.Println(err)
+		log.WithError(err).Error("failed to listen")
 		return err
 	}
 	defer l.Close()
 
-	buffer := make([]byte, server.Size)
 	for {
 		client, err := l.Accept()
 		if err != nil {
-			fmt.Println(err)
+			log.WithError(err).Error("failed to accept connection")
 			continue
 		}
 		conn, ok := client.(*net.TCPConn)
@@ -33,10 +31,10 @@ func (server *Server) Run() error {
 			log.Error("invalid connection type")
 			continue
 		}
-		err = conn.SetReadBuffer(len(buffer))
+		err = conn.SetReadBuffer(server.Size)
 		if err != nil {
-			log.Error("unable to set read buffer size")
-			return err
+			// Non-fatal: log and continue serving other connections.
+			log.WithError(err).Error("unable to set read buffer size")
 		}
 
 		log.WithFields(log.Fields{
@@ -44,11 +42,13 @@ func (server *Server) Run() error {
 			"remote":  client.RemoteAddr(),
 		}).Info("connected")
 
-		go serverRunTcp(conn, buffer)
+		go serverRunTcp(conn, server.Size)
 	}
 }
 
-func serverRunTcp(conn *net.TCPConn, buffer []byte) {
+func serverRunTcp(conn *net.TCPConn, size int) {
+	// Each goroutine allocates its own buffer to avoid data races.
+	buffer := make([]byte, size)
 	totalBytes := float64(0)
 	totalElapsed := time.Duration(0)
 
@@ -65,10 +65,16 @@ func serverRunTcp(conn *net.TCPConn, buffer []byte) {
 		totalBytes = totalBytes + float64(n)
 		totalElapsed = totalElapsed + elapsed
 	}
-	mbps := float64(totalBytes) * 8 / 1024 / 1024 / totalElapsed.Seconds()
 
-	log.WithFields(log.Fields{
-		"remote": conn.RemoteAddr(),
-		"mbps":   mbps,
-	}).Info("rate average")
+	if totalElapsed.Seconds() > 0 {
+		mbps := totalBytes * 8 / 1024 / 1024 / totalElapsed.Seconds()
+		log.WithFields(log.Fields{
+			"remote": conn.RemoteAddr(),
+			"mbps":   mbps,
+		}).Info("rate average")
+	} else {
+		log.WithFields(log.Fields{
+			"remote": conn.RemoteAddr(),
+		}).Info("connection closed before any data received")
+	}
 }

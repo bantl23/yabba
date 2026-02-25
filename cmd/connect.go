@@ -25,13 +25,13 @@ func init() {
 var connectCmd = &cobra.Command{
 	Use:   "connect",
 	Short: "Connects to listeners",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client := run.Client{
 			Addresses:   connectAddrs,
 			Connections: connections,
 			Duration:    connectDuration,
 			Size:        connectSize,
 		}
-		client.Run()
+		return client.Run()
 	},
 }
